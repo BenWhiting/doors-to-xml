@@ -1,0 +1,145 @@
+/************************* Main Function **************************/
+void exportModuleToXml(Module m, string filePath) {
+    Stream xmlStream = writeXmlHeader(filePath)
+    writeModuleToXml(m, xmlStream)
+    writeXmlFooter(xmlStream)
+}
+
+/************************* Write XML Header **************************/
+Stream writeXmlHeader(string filePath) {
+    Stream s = null
+    s = write("<Module>\n")
+    s << format("<ExportDate>%s</ExportDate>\n", dateAndTimeStr("%Y-%m-%d %H:%M:%S"))
+    s << format("<FileName>%s</FileName>\n", filePath)
+    return s
+}
+
+/************************* Write XML Footer **************************/
+void writeXmlFooter(Stream xmlStream) {
+    xmlStream << "</Module>"
+}
+
+/************************* Write Module to XML **************************/
+void writeModuleToXml(Module m, Stream xmlStream) {
+    // Write module attributes
+    writeObjectAttributesToXml(m, xmlStream)
+
+    // Write module objects and their attributes
+    Object obj
+    for obj in m do {
+        writeObjectToXml(obj, xmlStream)
+    }
+}
+
+/************************* Write Object to XML **************************/
+void writeObjectToXml(Object o, Stream xmlStream) {
+    xmlStream << format("<Object Type='%s' ID='%d'>\n", o."Object Type", o."Object ID")
+    writeObjectAttributesToXml(o, xmlStream)
+    writeTableDataToXml(o, xmlStream)
+    writeObjectLinksToXml(o, xmlStream)
+    writeObjectFilesToXml(o, xmlStream)
+    xmlStream << "</Object>\n"
+}
+
+/************************* Write Object Attributes to XML **************************/
+void writeObjectAttributesToXml(Object o, Stream xmlStream) {
+    xmlStream << "<Attributes>\n"
+    for attr in o do {
+        string attrName = name(attr)
+        string attrValue = attr."Value"
+        xmlStream << format("<Attribute Name='%s' Value='%s'/>\n", escapeXml(attrName), escapeXml(attrValue))
+    }
+    xmlStream << "</Attributes>\n"
+}
+
+/************************* Write Object Links to XML **************************/
+void writeObjectLinksToXml(Object o, Stream xmlStream) {
+    xmlStream << "<Links>\n"
+    for lnk in o -> "*" do {
+        xmlStream << format("<Link Type='%s' TargetID='%d'/>\n", escapeXml(lnk."Link Type"), lnk."Target ID")
+    }
+    xmlStream << "</Links>\n"
+}
+
+/************************* Write Object Files to XML **************************/
+void writeObjectFilesToXml(Object o, Stream xmlStream) {
+    xmlStream << "<Files>\n"
+    string oName = name(o)
+    string moduleName = moduleFileName(o)
+    int numFiles = countFiles(o)
+    for (int i = 1; i <= numFiles; i++) {
+        string fileName = format("%s_%s_File%d", moduleName, oName, i)
+        byte content[] = getFileContent(o, i)
+        createFile(fileName, content)
+        xmlStream << format("<File Name='%s'/>\n", escapeXml(fileName))
+    }
+    xmlStream << "</Files>\n"
+}
+
+/************************* Write Table Data to XML **************************/
+void writeTableDataToXml(Object o, Stream xmlStream) {
+    // Check if the object has any tables
+    if (!hasTables(o)) return
+    
+    // Write the opening "tables" tag to the XML stream
+    xmlStream << "<tables>\n"
+    
+    // Loop through each table in the object
+    for tableObj in o do {
+        // Get the table data
+        string tableName = name(tableObj)
+        string tableTitle = title(tableObj)
+        int numCols = columns(tableObj)
+        int numRows = rows(tableObj)
+        
+        // Write the opening "table" tag to the XML stream
+        string tableTag = "<table name=\"" tableName "\" title=\"" tableTitle "\" numCols=\"" numCols "\" numRows=\"" numRows "\">"
+        xmlStream << tableTag
+        
+        // Write the column names to the XML stream
+        string columnsTag = "<columns>"
+        xmlStream << columnsTag
+        for col in tableObj do {
+            string colName = name(col)
+            string colTag = "<column name=\"" colName "\"/>"
+            xmlStream << colTag
+        }
+        string columnsEndTag = "</columns>"
+        xmlStream << columnsEndTag
+        
+        // Write the table data to the XML stream
+        string dataTag = "<data>"
+        xmlStream << dataTag
+        for row in tableObj do {
+            string rowTag = "<row>"
+            xmlStream << rowTag
+            for col in row do {
+                string cellData = stringOf(cell(col))
+                string cellTag = "<cell>" escapeXml(cellData) "</cell>"
+                xmlStream << cellTag
+            }
+            string rowEndTag = "</row>"
+            xmlStream << rowEndTag
+        }
+        string dataEndTag = "</data>"
+        xmlStream << dataEndTag
+        
+        // Write the closing "table" tag to the XML stream
+        string tableEndTag = "</table>"
+        xmlStream << tableEndTag
+    }
+    
+    // Write the closing "tables" tag to the XML stream
+    string tablesEndTag = "</tables>\n"
+    xmlStream << tablesEndTag
+}
+
+/************************* Escape XML **************************/
+string escapeXml(string s) {
+    s = replaceAll(s, "&", "&amp;")
+    s = replaceAll(s, "<", "&lt;")
+    s = replaceAll(s, ">", "&gt;")
+    s = replaceAll(s, "\"", "&quot;")
+    s = replaceAll(s, "'", "&apos;")
+    return s
+}
